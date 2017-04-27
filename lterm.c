@@ -14,14 +14,33 @@
                                     .alpha = 0 }
 
 static gboolean on_title_changed();
+static gboolean on_key_press();
        void     load_config_file();
 
 GtkWidget *window, *terminal;
+
+gboolean isfullscreen;
 
 static gboolean on_title_changed(GtkWidget *terminal, gpointer user_data) {
     GtkWindow *window = user_data;
     gtk_window_set_title(window, vte_terminal_get_window_title(VTE_TERMINAL(terminal))?:"Terminal");
     return TRUE;
+}
+
+static gboolean on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data) {
+    if (event->state & GDK_MOD1_MASK) {
+        switch (event->keyval) {
+            case GDK_KEY_Return:
+                if (isfullscreen)
+                    gtk_window_unfullscreen(GTK_WINDOW(window));
+                else
+                    gtk_window_fullscreen(GTK_WINDOW(window));
+                isfullscreen = !isfullscreen;
+                break;
+        }
+    }
+
+    return FALSE;
 }
 
 void load_config_file() {
@@ -85,6 +104,17 @@ void load_config_file() {
         vte_terminal_set_mouse_autohide(VTE_TERMINAL(terminal), autohide);
     }
 
+    setting = config_lookup(&cfg, "window");
+    if (setting != NULL) {
+        gboolean fullscreen;
+
+        config_setting_lookup_bool(setting, "start_fullscreen", &fullscreen);
+        
+        isfullscreen = fullscreen;
+        if (fullscreen) 
+            gtk_window_fullscreen(GTK_WINDOW(window));
+    }
+
     printf("Successfully loaded config file\n");
     config_destroy(&cfg);
     return;
@@ -137,6 +167,7 @@ int main(int argc, char *argv[]) {
     g_signal_connect(window, "delete-event", gtk_main_quit, NULL);
     g_signal_connect(terminal, "child-exited", gtk_main_quit, NULL);
     g_signal_connect(terminal, "window-title-changed", G_CALLBACK(on_title_changed), GTK_WINDOW(window));
+    g_signal_connect(window, "key-press-event", G_CALLBACK(on_key_press), NULL);
 
     gtk_widget_show_all(window);
     gtk_main();
